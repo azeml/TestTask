@@ -155,30 +155,30 @@ static AppDelegate *appDelegate = nil;
 	NSLog(@"Loading %@", urlString);
 	NSURLRequest *urlRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:urlString]];
 	[NSURLConnection sendAsynchronousRequest:urlRequest queue:[[NSOperationQueue alloc] init] completionHandler:^(NSURLResponse *response, NSData *data, NSError *error) {
-		NSArray *contentsArray = nil;
-		if (error) {
-			NSLog(@"Error:%i %@", error.code, error.localizedDescription);
-		} else if ([data length] > 0) {
-			BOOL isResponseOK = YES;
-			NSHTTPURLResponse *HTTPResponse = (NSHTTPURLResponse *)response;
-			if ([HTTPResponse isKindOfClass:[NSHTTPURLResponse class]]) {
-				if (HTTPResponse.statusCode != HTTP_RESPONSE_OK) {
-					NSLog(@"response code:%i", HTTPResponse.statusCode);
-					isResponseOK = NO;
+		[self.managedObjectContext performBlock:^{
+			NSArray *contentsArray = nil;
+			if (error) {
+				NSLog(@"Error:%i %@", error.code, error.localizedDescription);
+			} else if ([data length] > 0) {
+				BOOL isResponseOK = YES;
+				NSHTTPURLResponse *HTTPResponse = (NSHTTPURLResponse *)response;
+				if ([HTTPResponse isKindOfClass:[NSHTTPURLResponse class]]) {
+					if (HTTPResponse.statusCode != HTTP_RESPONSE_OK) {
+						NSLog(@"response code:%i", HTTPResponse.statusCode);
+						isResponseOK = NO;
+					}
 				}
-			}
-			if (isResponseOK) {
-				NSError *JSONError = nil;
-				contentsArray = [NSJSONSerialization JSONObjectWithData:data options:0 error:&JSONError];
-				if (JSONError) {
-					NSLog(@"Parsing error: %@", JSONError.localizedDescription);
-				} else if (![contentsArray isKindOfClass:[NSArray class]]) {
-					NSLog(@"JSON response is not an array");
-				} else {
-					NSLog(@"%@", contentsArray);
-					
-					NSManagedObjectContext *context = self.managedObjectContext;
-					@synchronized (self) {
+				if (isResponseOK) {
+					NSError *JSONError = nil;
+					contentsArray = [NSJSONSerialization JSONObjectWithData:data options:0 error:&JSONError];
+					if (JSONError) {
+						NSLog(@"Parsing error: %@", JSONError.localizedDescription);
+					} else if (![contentsArray isKindOfClass:[NSArray class]]) {
+						NSLog(@"JSON response is not an array");
+					} else {
+						NSLog(@"%@", contentsArray);
+						
+						NSManagedObjectContext *context = self.managedObjectContext;
 						for (id contentObject in contentsArray) {
 							if ([contentObject isKindOfClass:[NSDictionary class]]) {
 								Item *itemEntity = [NSEntityDescription insertNewObjectForEntityForName:ENTITY_ITEM inManagedObjectContext:context];
@@ -196,22 +196,22 @@ static AppDelegate *appDelegate = nil;
 						[self saveContext];
 					}
 				}
+			} else {
+				NSLog(@"Empty response");
 			}
-		} else {
-			NSLog(@"Empty response");
-		}
-		NSArray *fetchResult = [self fetchFromCache];
-		[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_CONT_NOTIF object:fetchResult];
-		if (self.activeFetchRequestCount == 0) {
-			[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_FINISHED_NOTIF object:nil];
-		} else {
-			// start fetching images here, IU has been populated with items as a result of posting FETCH_CONT_NOTIF
-			for (Item *itemEntity in fetchResult) {
-				if (itemEntity.imageURL) {
-					[self fetchImageForItem:itemEntity];
+			NSArray *fetchResult = [self fetchFromCache];
+			[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_CONT_NOTIF object:fetchResult];
+			if (self.activeFetchRequestCount == 0) {
+				[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_FINISHED_NOTIF object:nil];
+			} else {
+				// start fetching images here, IU has been populated with items as a result of posting FETCH_CONT_NOTIF
+				for (Item *itemEntity in fetchResult) {
+					if (itemEntity.imageURL) {
+						[self fetchImageForItem:itemEntity];
+					}
 				}
 			}
-		}
+		}];
 	}];
 }
 
@@ -219,35 +219,32 @@ static AppDelegate *appDelegate = nil;
 	NSLog(@"Loading %@", item.imageURL);
 	NSURLRequest *urlRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:item.imageURL]];
 	[NSURLConnection sendAsynchronousRequest:urlRequest queue:[[NSOperationQueue alloc] init] completionHandler:^(NSURLResponse *response, NSData *data, NSError *error) {
-		if (error) {
-			NSLog(@"Error:%i %@", error.code, error.localizedDescription);
-		} else if ([data length] > 0) {
-			BOOL isResponseOK = YES;
-			NSHTTPURLResponse *HTTPResponse = (NSHTTPURLResponse *)response;
-			if ([HTTPResponse isKindOfClass:[NSHTTPURLResponse class]]) {
-				if (HTTPResponse.statusCode != HTTP_RESPONSE_OK) {
-					NSLog(@"response code for '%@':%i", item.name, HTTPResponse.statusCode);
-					isResponseOK = NO;
+		[self.managedObjectContext performBlock:^{
+			if (error) {
+				NSLog(@"Error:%i %@", error.code, error.localizedDescription);
+			} else if ([data length] > 0) {
+				BOOL isResponseOK = YES;
+				NSHTTPURLResponse *HTTPResponse = (NSHTTPURLResponse *)response;
+				if ([HTTPResponse isKindOfClass:[NSHTTPURLResponse class]]) {
+					if (HTTPResponse.statusCode != HTTP_RESPONSE_OK) {
+						NSLog(@"response code for '%@':%i", item.name, HTTPResponse.statusCode);
+						isResponseOK = NO;
+					}
 				}
-			}
-			if (isResponseOK) {
-				NSLog(@"loaded image for:'%@' size:%i", item.name, data.length);
-				@synchronized (self) {
+				if (isResponseOK) {
+					NSLog(@"loaded image for:'%@' size:%i", item.name, data.length);
 					item.imageData = data;
-					//[self saveContext];
+					[self saveContext];
 					[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_IMG_NOTIF object:item];
 				}
+			} else {
+				NSLog(@"Empty response");
 			}
-		} else {
-			NSLog(@"Empty response");
-		}
-		self.activeFetchRequestCount--;
-		if (self.activeFetchRequestCount == 0) {
-			@synchronized (self) {
-				[self saveContext];
+			self.activeFetchRequestCount--;
+			if (self.activeFetchRequestCount == 0) {
+				[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_FINISHED_NOTIF object:nil];
 			}
-			[[NSNotificationCenter defaultCenter] postNotificationName:FETCH_FINISHED_NOTIF object:nil];
-		}
+		}];
 	}];
 }
 

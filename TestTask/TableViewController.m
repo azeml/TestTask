@@ -70,12 +70,12 @@
 	// clean data
 	if (allItemsArray.count > 0) {
 		NSManagedObjectContext *context = [[AppDelegate instance] managedObjectContext];
-		@synchronized ([AppDelegate instance]) {
+		[context performBlockAndWait:^{
 			for (NSManagedObject *fetchedObj in allItemsArray) {
 				[context deleteObject:fetchedObj];
 			}
 			[[AppDelegate instance] saveContext];
-		}
+		}];
 		allItemsArray = nil;
 		[self.tableView reloadData];
 	}
@@ -84,12 +84,10 @@
 }
 
 - (void)fetchContentsNotification:(NSNotification*)notification {
-	dispatch_sync(dispatch_get_main_queue(), ^{
-		if ([notification.object isKindOfClass:[NSArray class]]) {
-			allItemsArray = notification.object;
-			[self.tableView reloadData];
-		}
-	});
+	if ([notification.object isKindOfClass:[NSArray class]]) {
+		allItemsArray = notification.object;
+		[self.tableView reloadData];
+	}
 }
 
 - (void)fetchImageNotification:(NSNotification*)notification {
@@ -98,9 +96,7 @@
 		NSInteger itemIndex = [allItemsArray indexOfObject:itemEntity];
 		if (itemIndex != NSNotFound) {
 			NSArray *indexPaths = [NSArray arrayWithObject:[NSIndexPath indexPathForRow:itemIndex inSection:0]];
-			dispatch_sync(dispatch_get_main_queue(), ^{
-				[self.tableView reloadRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
-			});
+			[self.tableView reloadRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
 		} else {
 			NSLog(@"item not found");
 		}
@@ -108,9 +104,7 @@
 }
 
 - (void)fetchFinishedNotification:(NSNotification*)notification {
-	dispatch_sync(dispatch_get_main_queue(), ^{
-		self.navigationItem.rightBarButtonItem.enabled = YES;
-	});
+	self.navigationItem.rightBarButtonItem.enabled = YES;
 }
 
 @end
