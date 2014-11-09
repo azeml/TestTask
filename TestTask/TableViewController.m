@@ -85,26 +85,35 @@
 
 - (void)fetchContentsNotification:(NSNotification*)notification {
 	if ([notification.object isKindOfClass:[NSArray class]]) {
-		allItemsArray = notification.object;
-		[self.tableView reloadData];
+		// dispatch UI block asynchronusly for a notification may have come in main thread
+		dispatch_async(dispatch_get_main_queue(), ^{
+			allItemsArray = notification.object;
+			[self.tableView reloadData];
+		});
 	}
 }
 
 - (void)fetchImageNotification:(NSNotification*)notification {
-	Item *itemEntity = notification.object;
-	if ([itemEntity isKindOfClass:[Item class]]) {
-		NSInteger itemIndex = [allItemsArray indexOfObject:itemEntity];
-		if (itemIndex != NSNotFound) {
-			NSArray *indexPaths = [NSArray arrayWithObject:[NSIndexPath indexPathForRow:itemIndex inSection:0]];
-			[self.tableView reloadRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
-		} else {
-			NSLog(@"item not found");
+	// dispatch UI block asynchronusly for a notification may have come in main thread
+	dispatch_async(dispatch_get_main_queue(), ^{
+		Item *itemEntity = notification.object;
+		if ([itemEntity isKindOfClass:[Item class]]) {
+			NSInteger itemIndex = [allItemsArray indexOfObject:itemEntity];
+			if (itemIndex != NSNotFound) {
+				NSArray *indexPaths = [NSArray arrayWithObject:[NSIndexPath indexPathForRow:itemIndex inSection:0]];
+				[self.tableView reloadRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+			} else {
+				NSLog(@"item not found");
+			}
 		}
-	}
+	});
 }
 
 - (void)fetchFinishedNotification:(NSNotification*)notification {
-	self.navigationItem.rightBarButtonItem.enabled = YES;
+	// dispatch UI block asynchronusly for a notification may have come in main thread
+	dispatch_async(dispatch_get_main_queue(), ^{
+		self.navigationItem.rightBarButtonItem.enabled = YES;
+	});
 }
 
 @end
